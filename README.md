@@ -27,4 +27,4 @@ I have little free time but I always used it as well as I could, learning, disco
 
 ---
 
-*Built and maintained by [gitowl58](https://gitowl58.com)*
+*Built and maintained by GitOwl58*
