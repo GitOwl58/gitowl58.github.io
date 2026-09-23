@@ -96,6 +96,16 @@ h2.section-title{font-family:var(--font-display);font-size:clamp(1.6rem,3.4vw,2.
 @media (max-width:760px){.philosophy{grid-template-columns:1fr;}}
 .philosophy p{color:var(--text-dim);margin:0 0 14px;}
 .philosophy strong{color:var(--text);font-weight:600;}
+.path-label{font-family:var(--font-mono);font-size:0.78rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);margin:32px 0 14px;}
+.path-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
+@media (max-width:820px){.path-grid{grid-template-columns:repeat(2,1fr);}}
+@media (max-width:480px){.path-grid{grid-template-columns:1fr;}}
+.path-card{--accent:var(--teal);display:flex;flex-direction:column;gap:10px;padding:20px;border-radius:14px;background:rgba(23,19,49,0.6);border:1px solid var(--border-glow);text-decoration:none;position:relative;overflow:hidden;transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}
+.path-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent);}
+.path-card:hover{transform:translateY(-4px);border-color:var(--accent);box-shadow:0 0 30px -8px var(--accent);}
+.path-tag{font-family:var(--font-display);font-weight:700;font-size:1.05rem;color:var(--text);}
+.path-desc{font-size:0.85rem;color:var(--text-dim);flex:1;line-height:1.45;}
+.path-arrow{font-family:var(--font-mono);font-size:0.76rem;color:var(--accent);}
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border-glow);border-radius:12px;overflow:hidden;box-shadow:0 0 30px -10px rgba(92,79,163,0.7);}
 @media (max-width:480px){.stat-grid{grid-template-columns:repeat(2,1fr);}}
 .stat{background:var(--surface);padding:20px 16px;text-align:center;transition:background .25s ease, transform .25s ease;}
@@ -219,6 +229,30 @@ footer .owl-mini{display:inline-flex;vertical-align:middle;margin-right:6px;widt
           <div class="stat"><span class="num">89+</span><span class="label">concepts</span></div>
           <div class="stat"><span class="num">1/day</span><span class="label">pace</span></div>
         </div>
+      </div>
+
+      <p class="path-label">Pick a path to start exploring</p>
+      <div class="path-grid reveal js-anim">
+        <a class="path-card" style="--accent:var(--gold)" href="https://github.com/GitOwl58/GitVault/tree/main/Homelabbing" target="_blank" rel="noopener">
+          <span class="path-tag">Homelabbing</span>
+          <span class="path-desc">Beginner homelab setups, Docker Compose, and more advanced Proxmox setups.</span>
+          <span class="path-arrow">Open ↗</span>
+        </a>
+        <a class="path-card" style="--accent:var(--blue)" href="https://github.com/GitOwl58/GitVault/tree/main/Courses/FreeCodecamp/Python" target="_blank" rel="noopener">
+          <span class="path-tag">Python</span>
+          <span class="path-desc">Python for beginners, from syntax to small projects.</span>
+          <span class="path-arrow">Open ↗</span>
+        </a>
+        <a class="path-card" style="--accent:var(--pink)" href="https://github.com/GitOwl58/GitVault/tree/main/Courses/TryHackMe" target="_blank" rel="noopener">
+          <span class="path-tag">Cybersecurity for beginners</span>
+          <span class="path-desc">The basics, from networking to OS basics, cryptography, ethical hacking tools.</span>
+          <span class="path-arrow">Open ↗</span>
+        </a>
+        <a class="path-card" style="--accent:var(--teal)" href="https://github.com/GitOwl58/GitVault/tree/main/Courses/HackTheBox/Linux%20Fundamentals" target="_blank" rel="noopener">
+          <span class="path-tag">Linux Fundamentals</span>
+          <span class="path-desc">Everything you need to start your Linux journey. The command line, demystified.</span>
+          <span class="path-arrow">Open ↗</span>
+        </a>
       </div>
     </section>
 
