@@ -361,6 +361,7 @@ footer .owl-mini{display:inline-flex;vertical-align:middle;margin-right:6px;widt
   GitOwl58, knowledge tracked and shared on git
 </footer>
 
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <script>
 (function(){
   try{
@@ -455,66 +456,262 @@ footer .owl-mini{display:inline-flex;vertical-align:middle;margin-right:6px;widt
 })();
 
 (function(){
-  // graph card constellation
+  // real interactive vault graph, driven by assets/graph-data.json
   try{
     var canvas = document.getElementById('graph-canvas');
     if(!canvas) return;
+    var card = canvas.closest('.graph-card');
     var ctx = canvas.getContext('2d');
     var dpr = Math.min(window.devicePixelRatio||1, 2);
-    var w,h,nodes=[];
-    var palette = ['#f0cd63','#7ff2d6','#8ec1ff','#e6a3ee'];
+    var w, h;
+
+    var GROUP_COLOR = {
+      'MOCs': '#f0cd63',
+      'Concepts': '#e6a3ee',
+      'Courses': '#8ec1ff',
+      'Homelabbing': '#7ff2d6',
+      'Resources': '#b0a6d9',
+      'Other': '#6e648f'
+    };
+    var REPO_BASE = 'https://github.com/GitOwl58/GitVault/blob/main/';
+
+    var transform = d3.zoomIdentity;
+    var simulation, nodes = [], links = [];
+    var hoverNode = null;
+    var neighborSet = null;
+    var tooltip = document.createElement('div');
+    tooltip.style.cssText = 'position:absolute;pointer-events:none;font-family:var(--font-mono,monospace);font-size:11px;color:#f4f1ff;background:rgba(8,6,15,0.9);border:1px solid #5c4fa3;border-radius:6px;padding:5px 9px;transform:translate(-50%,-130%);white-space:nowrap;opacity:0;transition:opacity .1s ease;z-index:5;';
+    card.style.position = 'relative';
+    card.appendChild(tooltip);
+
     function resize(){
       var rect = canvas.getBoundingClientRect();
       w = rect.width; h = rect.height;
       canvas.width = w*dpr; canvas.height = h*dpr;
       ctx.setTransform(dpr,0,0,dpr,0,0);
     }
-    function initNodes(){
-      nodes = [];
-      var count = Math.max(30, Math.floor((w*h)/7000));
-      for(var i=0;i<count;i++){
-        nodes.push({x:Math.random()*w, y:Math.random()*h, vx:(Math.random()-0.5)*0.25, vy:(Math.random()-0.5)*0.25, r:Math.random()*1.8+1, c:palette[Math.floor(Math.random()*palette.length)]});
+
+    function degreeRadius(d){
+      if(d.group === 'MOCs'){
+        return Math.max(10, Math.min(18, 9 + Math.sqrt(d.degree||1)*1.1));
       }
+      return Math.max(2.6, Math.min(6.5, 2 + Math.sqrt(d.degree||1)*0.7));
     }
-    var mouse = {x:-9999,y:-9999};
-    canvas.addEventListener('mousemove', function(e){ var r = canvas.getBoundingClientRect(); mouse.x = e.clientX-r.left; mouse.y = e.clientY-r.top; }, {passive:true});
-    canvas.addEventListener('mouseleave', function(){ mouse.x=-9999; mouse.y=-9999; });
+
     function draw(){
+      ctx.save();
       ctx.clearRect(0,0,w,h);
-      var linkDist = Math.max(70, w/8);
+      ctx.translate(transform.x, transform.y);
+      ctx.scale(transform.k, transform.k);
+
+      // links
+      ctx.lineWidth = 1/transform.k;
+      for(var i=0;i<links.length;i++){
+        var l = links[i];
+        var dim = neighborSet && !(neighborSet.has(l.source.id) && neighborSet.has(l.target.id));
+        ctx.strokeStyle = dim ? 'rgba(110,100,143,0.10)' : 'rgba(176,166,217,0.35)';
+        ctx.beginPath();
+        ctx.moveTo(l.source.x, l.source.y);
+        ctx.lineTo(l.target.x, l.target.y);
+        ctx.stroke();
+      }
+
+      // nodes
+      for(var j=0;j<nodes.length;j++){
+        var n = nodes[j];
+        var dimmed = neighborSet && !neighborSet.has(n.id);
+        var col = GROUP_COLOR[n.group] || GROUP_COLOR.Other;
+        var r = degreeRadius(n);
+        ctx.beginPath();
+        ctx.fillStyle = dimmed ? 'rgba(110,100,143,0.35)' : col;
+        ctx.arc(n.x, n.y, r, 0, Math.PI*2);
+        ctx.fill();
+        if(n === hoverNode){
+          ctx.lineWidth = 2/transform.k;
+          ctx.strokeStyle = '#f4f1ff';
+          ctx.stroke();
+        }
+      }
+      // glow only the hovered node + its direct neighbours (cheap: capped set)
+      if(hoverNode){
+        for(var g=0;g<nodes.length;g++){
+          var gn = nodes[g];
+          if(!neighborSet.has(gn.id)) continue;
+          var gcol = GROUP_COLOR[gn.group] || GROUP_COLOR.Other;
+          var gr = degreeRadius(gn);
+          ctx.save();
+          ctx.shadowColor = gcol;
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.fillStyle = gcol;
+          ctx.arc(gn.x, gn.y, gr, 0, Math.PI*2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+      ctx.restore();
+    }
+
+    function screenToWorld(px, py){
+      return { x: (px - transform.x) / transform.k, y: (py - transform.y) / transform.k };
+    }
+
+    function findNodeAt(px, py){
+      var p = screenToWorld(px, py);
+      var best = null, bestDist = Infinity;
       for(var i=0;i<nodes.length;i++){
         var n = nodes[i];
-        n.x += n.vx; n.y += n.vy;
-        if(n.x<0||n.x>w) n.vx*=-1;
-        if(n.y<0||n.y>h) n.vy*=-1;
-        for(var j=i+1;j<nodes.length;j++){
-          var m = nodes[j];
-          var d = Math.hypot(n.x-m.x, n.y-m.y);
-          if(d<linkDist){
-            ctx.strokeStyle = 'rgba(176,166,217,' + (1-d/linkDist)*0.45 + ')';
-            ctx.beginPath(); ctx.moveTo(n.x,n.y); ctx.lineTo(m.x,m.y); ctx.stroke();
-          }
-        }
-        var dm = Math.hypot(n.x-mouse.x, n.y-mouse.y);
-        if(dm<150){
-          ctx.strokeStyle = 'rgba(240,205,99,' + (1-dm/150)*0.8 + ')';
-          ctx.lineWidth = 1.4;
-          ctx.beginPath(); ctx.moveTo(n.x,n.y); ctx.lineTo(mouse.x,mouse.y); ctx.stroke();
-          ctx.lineWidth = 1;
-        }
+        var r = degreeRadius(n) + 3;
+        var dx = n.x - p.x, dy = n.y - p.y;
+        var d2 = dx*dx + dy*dy;
+        if(d2 < r*r && d2 < bestDist){ bestDist = d2; best = n; }
       }
-      for(var k=0;k<nodes.length;k++){
-        var p = nodes[k];
-        ctx.shadowColor = p.c; ctx.shadowBlur = 6;
-        ctx.beginPath(); ctx.fillStyle = p.c; ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
-        ctx.shadowBlur = 0;
-      }
-      requestAnimationFrame(draw);
+      return best;
     }
-    var ro = new ResizeObserver(function(){ resize(); initNodes(); });
+
+    function neighborsOf(node){
+      var s = new Set([node.id]);
+      for(var i=0;i<links.length;i++){
+        if(links[i].source.id === node.id) s.add(links[i].target.id);
+        if(links[i].target.id === node.id) s.add(links[i].source.id);
+      }
+      return s;
+    }
+
+    var dragging = null;
+
+    function pointerPos(e){
+      var rect = canvas.getBoundingClientRect();
+      var cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+      var cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+      return {x: cx, y: cy};
+    }
+
+    canvas.addEventListener('mousemove', function(e){
+      var p = pointerPos(e);
+      if(dragging){
+        var wp = screenToWorld(p.x, p.y);
+        dragging.fx = wp.x; dragging.fy = wp.y;
+        if(simulation) simulation.alphaTarget(0.15).restart();
+        return;
+      }
+      var n = findNodeAt(p.x, p.y);
+      if(n !== hoverNode){
+        hoverNode = n;
+        neighborSet = n ? neighborsOf(n) : null;
+      }
+      if(n){
+        tooltip.textContent = n.title;
+        tooltip.style.left = p.x + 'px';
+        tooltip.style.top = p.y + 'px';
+        tooltip.style.opacity = '1';
+        canvas.style.cursor = 'pointer';
+      } else {
+        tooltip.style.opacity = '0';
+        canvas.style.cursor = 'grab';
+      }
+    });
+
+    var dragStart = null; // {x,y} in screen space, to distinguish a click from a drag
+    var DRAG_THRESHOLD = 4; // px
+
+    canvas.addEventListener('mousedown', function(e){
+      var p = pointerPos(e);
+      var n = findNodeAt(p.x, p.y);
+      if(n){
+        dragging = n;
+        dragStart = {x: p.x, y: p.y};
+        canvas.style.cursor = 'grabbing';
+      }
+    });
+
+    window.addEventListener('mouseup', function(){
+      if(dragging){
+        dragging.fx = null; dragging.fy = null;
+        if(simulation) simulation.alphaTarget(0);
+        dragging = null;
+      }
+    });
+
+    canvas.addEventListener('mouseleave', function(){
+      hoverNode = null; neighborSet = null; tooltip.style.opacity = '0';
+    });
+
+    canvas.addEventListener('click', function(e){
+      var p = pointerPos(e);
+      // suppress click-to-open if this was actually the release of a drag
+      if(dragStart){
+        var moved = Math.hypot(p.x - dragStart.x, p.y - dragStart.y);
+        dragStart = null;
+        if(moved > DRAG_THRESHOLD) return;
+      }
+      var n = findNodeAt(p.x, p.y);
+      if(n && n.path){
+        var url = REPO_BASE + n.path.split('/').map(encodeURIComponent).join('/');
+        window.open(url, '_blank', 'noopener');
+      }
+    });
+
+    var zoomBehavior = d3.zoom()
+      .scaleExtent([0.25, 5])
+      .filter(function(event){ return !dragging && (event.type !== 'mousedown' || !findNodeAt(pointerPos(event).x, pointerPos(event).y)); })
+      .on('zoom', function(event){
+        transform = event.transform;
+      });
+    d3.select(canvas).call(zoomBehavior);
+
+    fetch('assets/graph-data.json').then(function(r){ return r.json(); }).then(function(data){
+      nodes = data.nodes;
+      links = data.links;
+
+      var count = nodes.length, linkCount = links.length;
+      var caption = card.querySelector('.graph-caption');
+      if(caption){ caption.textContent = count + ' notes, ' + linkCount + ' real connections — drag, scroll to zoom, click to open.'; }
+
+      simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(function(d){ return d.id; }).distance(18).strength(0.3))
+        .force('charge', d3.forceManyBody().strength(-26).distanceMax(150))
+        .force('x', d3.forceX(w/2).strength(0.09))
+        .force('y', d3.forceY(h/2).strength(0.09))
+        .force('collide', d3.forceCollide().radius(function(d){ return degreeRadius(d)+2; }))
+        .force('boundary', function(alpha){
+          var r = Math.min(w,h)*0.35;
+          var cx = w/2, cy = h/2;
+          for(var i=0;i<nodes.length;i++){
+            var n = nodes[i];
+            var dx = n.x-cx, dy = n.y-cy;
+            var dist = Math.sqrt(dx*dx+dy*dy) || 1e-6;
+            if(dist > r){
+              var k = r/dist;
+              n.x = cx + dx*k;
+              n.y = cy + dy*k;
+              n.vx *= 0.4;
+              n.vy *= 0.4;
+            }
+          }
+        })
+        .alphaDecay(0.02);
+
+      // render loop is fully decoupled from the simulation's tick events,
+      // so zoom/pan/hover always redraw even once the simulation has settled
+      var rafId = null;
+      function renderLoop(){
+        draw();
+        rafId = requestAnimationFrame(renderLoop);
+      }
+      if(rafId === null) renderLoop();
+    }).catch(function(err){
+      console.warn('graph data failed to load', err);
+    });
+
+    var ro = new ResizeObserver(function(){
+      resize();
+      if(simulation){ simulation.force('x', d3.forceX(w/2).strength(0.045)); simulation.force('y', d3.forceY(h/2).strength(0.045)); simulation.alpha(0.3).restart(); }
+      draw();
+    });
     ro.observe(canvas);
-    resize(); initNodes(); draw();
-  }catch(e){}
+    resize();
+  }catch(e){ console.warn('graph init failed', e); }
 })();
 </script>
 <script data-goatcounter="https://gitowl58.goatcounter.com/count"
